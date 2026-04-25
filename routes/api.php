@@ -10,21 +10,22 @@ use App\Http\Controllers\Api\AuthController;
 // Public Routes
 Route::post('/register', [AuthController::class, 'register']);
 Route::post('/login', [AuthController::class, 'login']);
+Route::get('/products', [ProductController::class, 'index']);
 
 // Protected Routes
 Route::middleware('auth:sanctum')->group(function () {
     Route::get('/user', function (Request $request) {
         return $request->user();
     });
-    
+
     Route::post('/logout', [AuthController::class, 'logout']);
-    
+
     // Pet Profile Routes
     Route::get('/pets', [PetController::class, 'index']);
     Route::post('/pets', [PetController::class, 'store']);
     Route::delete('/pets/{pet}', [PetController::class, 'destroy']);
 
-    // SuperAdmin Routes
+    // SuperAdmin Routes (Protected by Admin Role in Controller)
     Route::prefix('superadmin')->group(function () {
         Route::apiResource('products', ProductController::class);
     });

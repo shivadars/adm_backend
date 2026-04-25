@@ -7,34 +7,11 @@ use App\Models\Product;
 use App\Models\Category;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Validator;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
-use Illuminate\Routing\Controllers\HasMiddleware;
-use Illuminate\Routing\Controllers\Middleware;
 
-class ProductController extends Controller implements HasMiddleware
+class ProductController extends Controller
 {
-    /**
-     * Define the security middleware for this controller.
-     * 
-     * Ensures only 'admin' or 'superadmin' roles can modify products.
-     * The 'index' method is kept public for guest shopping.
-     */
-    public static function middleware(): array
-    {
-        return [
-            new Middleware(function ($request, $next) {
-                if ($request->user() && ($request->user()->role === 'admin' || $request->user()->role === 'superadmin')) {
-                    return $next($request);
-                }
-
-                return response()->json([
-                    'status' => 'error',
-                    'message' => 'Unauthorized. Admin access required.'
-                ], 403);
-            }, except: ['index']),
-        ];
-    }
-
     /**
      * Display a listing of products.
      */
@@ -44,7 +21,17 @@ class ProductController extends Controller implements HasMiddleware
 
         // Convert strings back to arrays for React compatibility
         $products->transform(function ($product) {
-            return $this->formatProduct($product);
+            $product->sizes = $product->sizes ? explode(', ', $product->sizes) : [];
+            $product->tags = $product->tags ? explode(', ', $product->tags) : [];
+            $product->materials = $product->materials ? explode(', ', $product->materials) : [];
+            $product->colors = $product->colors ? explode(', ', $product->colors) : [];
+
+            // Add full URL to image path if it's a local storage path
+            if ($product->image && str_starts_with($product->image, '/storage')) {
+                $product->image = url($product->image);
+            }
+
+            return $product;
         });
 
         return response()->json([
@@ -60,25 +47,21 @@ class ProductController extends Controller implements HasMiddleware
     {
         $data = $request->all();
 
-        // Map Category Name to ID if needed (Auto-create if missing)
+        // Map Category Name to ID if needed
         if (isset($data['category']) && !isset($data['category_id'])) {
-            $categoryName = $data['category'];
-            $category = Category::where('name', $categoryName)->first();
-            
-            if (!$category) {
-                // Auto-create category so the product save doesn't fail
-                $category = Category::create([
-                    'name' => $categoryName,
-                    'slug' => strtolower(str_replace(' ', '-', $categoryName)),
-                    'status' => 'active'
-                ]);
+            $category = Category::where('name', $data['category'])->first();
+            if ($category) {
+                $data['category_id'] = $category->id;
             }
-            
-            $data['category_id'] = $category->id;
         }
 
         // Convert Arrays to Strings (for sizes, tags, materials, colors)
-        $data = $this->stringifyArrays($data);
+        $arrayFields = ['sizes', 'tags', 'materials', 'colors'];
+        foreach ($arrayFields as $field) {
+            if (isset($data[$field]) && is_array($data[$field])) {
+                $data[$field] = implode(', ', $data[$field]);
+            }
+        }
 
         // Handle Image Upload (Base64 or URL)
         if (isset($data['image']) && (str_contains($data['image'], 'data:image') || str_contains($data['image'], ';base64,'))) {
@@ -103,6 +86,9 @@ class ProductController extends Controller implements HasMiddleware
             }
         }
 
+        // Debugging: Log the data to see what's coming in
+        Log::info('Product Create Data:', ['image_present' => isset($data['image']), 'image_path' => $data['image'] ?? 'null']);
+
         $validator = Validator::make($data, [
             'category_id' => 'required|exists:categories,id',
             'name' => 'required|string|max:255',
@@ -120,6 +106,7 @@ class ProductController extends Controller implements HasMiddleware
         ]);
 
         if ($validator->fails()) {
+            Log::warning('Product Store Validation Failed:', $validator->errors()->toArray());
             return response()->json([
                 'status' => 'error',
                 'message' => 'Validation failed',
@@ -129,8 +116,16 @@ class ProductController extends Controller implements HasMiddleware
 
         $product = Product::create($data);
 
-        // Convert strings back to arrays and add full URL
-        $this->formatProduct($product);
+        // Convert strings back to arrays so React doesn't crash when mapping
+        $product->sizes = $product->sizes ? explode(', ', $product->sizes) : [];
+        $product->tags = $product->tags ? explode(', ', $product->tags) : [];
+        $product->materials = $product->materials ? explode(', ', $product->materials) : [];
+        $product->colors = $product->colors ? explode(', ', $product->colors) : [];
+
+        // Add full URL to image path for React
+        if ($product->image && str_starts_with($product->image, '/storage')) {
+            $product->image = url($product->image);
+        }
 
         return response()->json([
             'status' => 'success',
@@ -173,7 +168,12 @@ class ProductController extends Controller implements HasMiddleware
         }
 
         // Convert Arrays to Strings
-        $data = $this->stringifyArrays($data);
+        $arrayFields = ['sizes', 'tags', 'materials', 'colors'];
+        foreach ($arrayFields as $field) {
+            if (isset($data[$field]) && is_array($data[$field])) {
+                $data[$field] = implode(', ', $data[$field]);
+            }
+        }
 
         $validator = Validator::make($data, [
             'category_id' => 'sometimes|required|exists:categories,id',
@@ -183,6 +183,7 @@ class ProductController extends Controller implements HasMiddleware
         ]);
 
         if ($validator->fails()) {
+            Log::warning('Product Update Validation Failed:', $validator->errors()->toArray());
             return response()->json([
                 'status' => 'error',
                 'message' => 'Validation failed',
@@ -193,7 +194,14 @@ class ProductController extends Controller implements HasMiddleware
         $product->update($data);
 
         // Convert back to arrays for React
-        $this->formatProduct($product);
+        $product->sizes = $product->sizes ? explode(', ', $product->sizes) : [];
+        $product->tags = $product->tags ? explode(', ', $product->tags) : [];
+        $product->materials = $product->materials ? explode(', ', $product->materials) : [];
+        $product->colors = $product->colors ? explode(', ', $product->colors) : [];
+
+        if ($product->image && str_starts_with($product->image, '/storage')) {
+            $product->image = url($product->image);
+        }
 
         return response()->json([
             'status' => 'success',
@@ -222,35 +230,5 @@ class ProductController extends Controller implements HasMiddleware
             'status' => 'success',
             'message' => 'Product deleted successfully'
         ]);
-    }
-    /**
-     * Helper to convert arrays to comma-separated strings for DB.
-     */
-    private function stringifyArrays($data)
-    {
-        $arrayFields = ['sizes', 'tags', 'materials', 'colors'];
-        foreach ($arrayFields as $field) {
-            if (isset($data[$field]) && is_array($data[$field])) {
-                $data[$field] = implode(', ', $data[$field]);
-            }
-        }
-        return $data;
-    }
-
-    /**
-     * Helper to format product data for React.
-     */
-    private function formatProduct($product)
-    {
-        $product->sizes = $product->sizes ? explode(', ', $product->sizes) : [];
-        $product->tags = $product->tags ? explode(', ', $product->tags) : [];
-        $product->materials = $product->materials ? explode(', ', $product->materials) : [];
-        $product->colors = $product->colors ? explode(', ', $product->colors) : [];
-
-        if ($product->image && str_starts_with($product->image, '/storage')) {
-            $product->image = url($product->image);
-        }
-
-        return $product;
     }
 }
