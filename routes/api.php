@@ -23,6 +23,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // Pet Profile Routes
     Route::get('/pets', [PetController::class, 'index']);
     Route::post('/pets', [PetController::class, 'store']);
+    Route::put('/pets/{pet}', [PetController::class, 'update']);
     Route::delete('/pets/{pet}', [PetController::class, 'destroy']);
 
     // SuperAdmin Routes (Protected by Admin Role in Controller)

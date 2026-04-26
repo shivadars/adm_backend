@@ -122,4 +122,81 @@ class PetController extends Controller
             'message' => 'Pet deleted successfully'
         ]);
     }
+
+    /**
+     * Update the specified pet in storage.
+     */
+    public function update(Request $request, $id)
+    {
+        // Find the pet belonging to the authenticated user
+        $pet = Pet::where('user_id', auth()->id())->find($id);
+
+        if (!$pet) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Pet not found or unauthorized'
+            ], 404);
+        }
+
+        $data = $request->all();
+
+        // Validate the request
+        $validator = Validator::make($data, [
+            'name' => 'sometimes|required|string|max:255',
+            'breed' => 'sometimes|required|string|max:255',
+            'dob' => 'sometimes|required|date',
+            'image' => 'nullable|string',
+            'instagram_username' => 'nullable|string|max:255',
+        ]);
+
+        if ($validator->fails()) {
+            return response()->json([
+                'status' => 'error',
+                'message' => 'Validation failed',
+                'errors' => $validator->errors()
+            ], 422);
+        }
+
+        // Handle Image Upload (Base64)
+        if (isset($data['image']) && (str_contains($data['image'], 'data:image') || str_contains($data['image'], ';base64,'))) {
+            // Delete old image if it exists
+            if ($pet->image) {
+                $oldPath = str_replace('/storage/', '', $pet->image);
+                Storage::disk('public')->delete($oldPath);
+            }
+
+            $image = $data['image'];
+            if (str_contains($image, ',')) {
+                $parts = explode(',', $image);
+                $header = $parts[0];
+                $data64 = $parts[1];
+
+                $extension = 'png';
+                if (preg_match('/image\/(.*);/', $header, $matches)) {
+                    $extension = $matches[1];
+                }
+
+                $imageName = 'pet_' . time() . '_' . uniqid() . '.' . $extension;
+                Storage::disk('public')->put('pets/' . $imageName, base64_decode($data64));
+
+                $data['image'] = '/storage/pets/' . $imageName;
+            }
+        }
+
+        // Remove user_id from data to prevent ownership change
+        unset($data['user_id']);
+
+        $pet->update($data);
+
+        // Add full URL to image path for response
+        if ($pet->image && str_starts_with($pet->image, '/storage')) {
+            $pet->image = url($pet->image);
+        }
+
+        return response()->json([
+            'status' => 'success',
+            'message' => 'Pet profile updated successfully',
+            'data' => $pet
+        ]);
+    }
 }
