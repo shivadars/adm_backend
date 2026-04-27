@@ -15,9 +15,6 @@ class ProductController extends Controller implements HasMiddleware
 {
     /**
      * Define the security middleware for this controller.
-     * 
-     * Ensures only 'admin' or 'superadmin' roles can modify products.
-     * The 'index' method is kept public for guest shopping.
      */
     public static function middleware(): array
     {
@@ -42,7 +39,6 @@ class ProductController extends Controller implements HasMiddleware
     {
         $products = Product::with('category')->latest()->get();
 
-        // Convert strings back to arrays for React compatibility
         $products->transform(function ($product) {
             return $this->formatProduct($product);
         });
@@ -58,85 +54,93 @@ class ProductController extends Controller implements HasMiddleware
      */
     public function store(Request $request)
     {
-        $data = $request->all();
+        try {
+            $data = $request->all();
 
-        // Map Category Name to ID if needed (Auto-create if missing)
-        if (isset($data['category']) && !isset($data['category_id'])) {
-            $categoryName = $data['category'];
-            $category = Category::where('name', $categoryName)->first();
-            
-            if (!$category) {
-                // Auto-create category so the product save doesn't fail
-                $category = Category::create([
-                    'name' => $categoryName,
-                    'slug' => strtolower(str_replace(' ', '-', $categoryName)),
-                    'status' => 'active'
-                ]);
-            }
-            
-            $data['category_id'] = $category->id;
-        }
-
-        // Convert Arrays to Strings (for sizes, tags, materials, colors)
-        $data = $this->stringifyArrays($data);
-
-        // Handle Image Upload (Base64 or URL)
-        if (isset($data['image']) && (str_contains($data['image'], 'data:image') || str_contains($data['image'], ';base64,'))) {
-            $image = $data['image'];
-
-            // Get the part after the comma
-            if (str_contains($image, ',')) {
-                $parts = explode(',', $image);
-                $header = $parts[0];
-                $data64 = $parts[1];
-
-                // Get extension
-                $extension = 'png'; // Default
-                if (preg_match('/image\/(.*);/', $header, $matches)) {
-                    $extension = $matches[1];
+            // Auto-create category if name provided instead of ID
+            if (isset($data['category']) && !isset($data['category_id'])) {
+                $categoryName = $data['category'];
+                $category = Category::where('name', $categoryName)->first();
+                
+                if (!$category) {
+                    $category = Category::create([
+                        'name' => $categoryName,
+                        'slug' => strtolower(str_replace(' ', '-', $categoryName)),
+                        'status' => 'active'
+                    ]);
                 }
-
-                $imageName = 'product_' . time() . '_' . uniqid() . '.' . $extension;
-                Storage::disk('public')->put('products/' . $imageName, base64_decode($data64));
-
-                $data['image'] = '/storage/products/' . $imageName;
+                
+                $data['category_id'] = $category->id;
             }
-        }
 
-        $validator = Validator::make($data, [
-            'category_id' => 'required|exists:categories,id',
-            'name' => 'required|string|max:255',
-            'description' => 'nullable|string',
-            'sizes' => 'nullable|string',
-            'tags' => 'nullable|string',
-            'stock' => 'required|integer|min:0',
-            'mrp' => 'nullable|numeric|min:0',
-            'price' => 'required|numeric|min:0', // This is Selling Price
-            'materials' => 'nullable|string',
-            'colors' => 'nullable|string',
-            'image' => 'nullable|string',
-            'status' => 'nullable|string|in:active,inactive',
-            'featured' => 'nullable|boolean',
-        ]);
+            $data = $this->stringifyArrays($data);
 
-        if ($validator->fails()) {
+            // Handle Image Upload - Aggressive Detection
+            $file = null;
+            if ($request->hasFile('image')) {
+                $file = $request->file('image');
+            } else if (isset($data['image']) && $data['image'] instanceof \Illuminate\Http\UploadedFile) {
+                $file = $data['image'];
+            }
+
+            if ($file) {
+                $imageName = 'product_' . time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
+                $path = $file->storeAs('products', $imageName, 'public');
+                $data['image'] = '/storage/' . $path;
+            }
+
+            // --- PROTECTIVE LAYER: Ensure only fillable fields and correct types reach the DB ---
+            $fillableData = [];
+            $fields = ['category_id', 'name', 'description', 'tags', 'stock', 'mrp', 'price', 'materials', 'colors', 'image', 'status', 'featured'];
+            foreach ($fields as $field) {
+                if (isset($data[$field])) {
+                    $fillableData[$field] = $data[$field];
+                }
+            }
+
+            // Force image to be a string path (replaces any leftover File objects)
+            if (isset($fillableData['image']) && !is_string($fillableData['image'])) {
+                unset($fillableData['image']);
+            }
+
+            $validator = Validator::make($fillableData, [
+                'category_id' => 'required|exists:categories,id',
+                'name' => 'required|string|max:255',
+                'description' => 'nullable|string',
+                'tags' => 'nullable|string',
+                'stock' => 'required|integer|min:0',
+                'mrp' => 'nullable|numeric|min:0',
+                'price' => 'required|numeric|min:0',
+                'materials' => 'nullable|string',
+                'colors' => 'nullable|string',
+                'image' => 'nullable',
+                'status' => 'nullable|string|in:active,inactive',
+                'featured' => 'nullable|boolean',
+            ]);
+
+            if ($validator->fails()) {
+                return response()->json([
+                    'status' => 'error',
+                    'message' => 'Validation failed',
+                    'errors' => $validator->errors()
+                ], 422);
+            }
+
+            $product = Product::create($fillableData);
+            $this->formatProduct($product);
+
+            return response()->json([
+                'status' => 'success',
+                'message' => 'Product created successfully',
+                'data' => $product
+            ], 201);
+
+        } catch (\Exception $e) {
             return response()->json([
                 'status' => 'error',
-                'message' => 'Validation failed',
-                'errors' => $validator->errors()
-            ], 422);
+                'message' => 'Server error: ' . $e->getMessage()
+            ], 500);
         }
-
-        $product = Product::create($data);
-
-        // Convert strings back to arrays and add full URL
-        $this->formatProduct($product);
-
-        return response()->json([
-            'status' => 'success',
-            'message' => 'Product created successfully',
-            'data' => $product
-        ], 201);
     }
 
     /**
@@ -155,24 +159,16 @@ class ProductController extends Controller implements HasMiddleware
 
         $data = $request->all();
 
-        // Handle Image Upload (Base64)
-        if (isset($data['image']) && (str_contains($data['image'], 'data:image') || str_contains($data['image'], ';base64,'))) {
-            $image = $data['image'];
-            if (str_contains($image, ',')) {
-                $parts = explode(',', $image);
-                $header = $parts[0];
-                $data64 = $parts[1];
-                $extension = 'png';
-                if (preg_match('/image\/(.*);/', $header, $matches)) {
-                    $extension = $matches[1];
-                }
-                $imageName = 'product_' . time() . '_' . uniqid() . '.' . $extension;
-                Storage::disk('public')->put('products/' . $imageName, base64_decode($data64));
-                $data['image'] = '/storage/products/' . $imageName;
+        if ($request->hasFile('image')) {
+            if ($product->image) {
+                Storage::disk('public')->delete(str_replace('/storage/', '', $product->image));
             }
+            $file = $request->file('image');
+            $imageName = 'product_' . time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
+            $path = $file->storeAs('products', $imageName, 'public');
+            $data['image'] = '/storage/' . $path;
         }
 
-        // Convert Arrays to Strings
         $data = $this->stringifyArrays($data);
 
         $validator = Validator::make($data, [
@@ -191,8 +187,6 @@ class ProductController extends Controller implements HasMiddleware
         }
 
         $product->update($data);
-
-        // Convert back to arrays for React
         $this->formatProduct($product);
 
         return response()->json([
@@ -223,26 +217,24 @@ class ProductController extends Controller implements HasMiddleware
             'message' => 'Product deleted successfully'
         ]);
     }
-    /**
-     * Helper to convert arrays to comma-separated strings for DB.
-     */
+
     private function stringifyArrays($data)
     {
-        $arrayFields = ['sizes', 'tags', 'materials', 'colors'];
+        $arrayFields = ['tags', 'materials', 'colors', 'categories'];
         foreach ($arrayFields as $field) {
-            if (isset($data[$field]) && is_array($data[$field])) {
-                $data[$field] = implode(', ', $data[$field]);
+            if (isset($data[$field])) {
+                if (is_array($data[$field])) {
+                    $data[$field] = implode(', ', array_filter($data[$field]));
+                } elseif (is_object($data[$field])) {
+                    $data[$field] = json_encode($data[$field]);
+                }
             }
         }
         return $data;
     }
 
-    /**
-     * Helper to format product data for React.
-     */
     private function formatProduct($product)
     {
-        $product->sizes = $product->sizes ? explode(', ', $product->sizes) : [];
         $product->tags = $product->tags ? explode(', ', $product->tags) : [];
         $product->materials = $product->materials ? explode(', ', $product->materials) : [];
         $product->colors = $product->colors ? explode(', ', $product->colors) : [];

@@ -24,7 +24,7 @@ class PetController extends Controller
             'name' => 'required|string|max:255',
             'breed' => 'required|string|max:255',
             'dob' => 'required|date',
-            'image' => 'nullable|string', // Base64 or URL
+            'image' => 'nullable', // File object or URL string
             'instagram_username' => 'nullable|string|max:255',
             'size' => 'nullable|string|max:50',
             'neck_length' => 'nullable|numeric',
@@ -41,24 +41,12 @@ class PetController extends Controller
             ], 422);
         }
 
-        // Handle Image Upload (Base64)
-        if (isset($data['image']) && (str_contains($data['image'], 'data:image') || str_contains($data['image'], ';base64,'))) {
-            $image = $data['image'];
-            if (str_contains($image, ',')) {
-                $parts = explode(',', $image);
-                $header = $parts[0];
-                $data64 = $parts[1];
-
-                $extension = 'png'; // Default
-                if (preg_match('/image\/(.*);/', $header, $matches)) {
-                    $extension = $matches[1];
-                }
-
-                $imageName = 'pet_' . time() . '_' . uniqid() . '.' . $extension;
-                Storage::disk('public')->put('pets/' . $imageName, base64_decode($data64));
-
-                $data['image'] = '/storage/pets/' . $imageName;
-            }
+        // ── Handle Image Upload (Direct File) ──
+        if ($request->hasFile('image')) {
+            $file = $request->file('image');
+            $imageName = 'pet_' . time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
+            $path = $file->storeAs('pets', $imageName, 'public');
+            $data['image'] = '/storage/' . $path;
         }
 
         // Add user_id to data
@@ -167,30 +155,16 @@ class PetController extends Controller
             ], 422);
         }
 
-        // Handle Image Upload (Base64)
-        if (isset($data['image']) && (str_contains($data['image'], 'data:image') || str_contains($data['image'], ';base64,'))) {
+        // ── Handle Image Upload (Direct File) ──
+        if ($request->hasFile('image')) {
             // Delete old image if it exists
             if ($pet->image) {
-                $oldPath = str_replace('/storage/', '', $pet->image);
-                Storage::disk('public')->delete($oldPath);
+                Storage::disk('public')->delete(str_replace('/storage/', '', $pet->image));
             }
-
-            $image = $data['image'];
-            if (str_contains($image, ',')) {
-                $parts = explode(',', $image);
-                $header = $parts[0];
-                $data64 = $parts[1];
-
-                $extension = 'png';
-                if (preg_match('/image\/(.*);/', $header, $matches)) {
-                    $extension = $matches[1];
-                }
-
-                $imageName = 'pet_' . time() . '_' . uniqid() . '.' . $extension;
-                Storage::disk('public')->put('pets/' . $imageName, base64_decode($data64));
-
-                $data['image'] = '/storage/pets/' . $imageName;
-            }
+            $file = $request->file('image');
+            $imageName = 'pet_' . time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
+            $path = $file->storeAs('pets', $imageName, 'public');
+            $data['image'] = '/storage/' . $path;
         }
 
         // Remove user_id from data to prevent ownership change
