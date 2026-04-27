@@ -17,6 +17,11 @@ class Pet extends Model
         'image',
         'instagram_username',
         'status',
+        'size',
+        'neck_length',
+        'chest_length',
+        'back_length',
+        'top_to_toe_height',
     ];
 
     /**
