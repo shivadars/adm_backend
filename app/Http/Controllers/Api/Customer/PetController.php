@@ -26,6 +26,11 @@ class PetController extends Controller
             'dob' => 'required|date',
             'image' => 'nullable|string', // Base64 or URL
             'instagram_username' => 'nullable|string|max:255',
+            'size' => 'nullable|string|max:50',
+            'neck_length' => 'nullable|numeric',
+            'chest_length' => 'nullable|numeric',
+            'back_length' => 'nullable|numeric',
+            'top_to_toe_height' => 'nullable|numeric',
         ]);
 
         if ($validator->fails()) {
@@ -147,6 +152,11 @@ class PetController extends Controller
             'dob' => 'sometimes|required|date',
             'image' => 'nullable|string',
             'instagram_username' => 'nullable|string|max:255',
+            'size' => 'nullable|string|max:50',
+            'neck_length' => 'nullable|numeric',
+            'chest_length' => 'nullable|numeric',
+            'back_length' => 'nullable|numeric',
+            'top_to_toe_height' => 'nullable|numeric',
         ]);
 
         if ($validator->fails()) {

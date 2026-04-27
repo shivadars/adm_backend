@@ -4,6 +4,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 
 use App\Http\Controllers\Api\SuperAdmin\ProductController;
+use App\Http\Controllers\Api\SuperAdmin\CategoryController;
 use App\Http\Controllers\Api\Auth\AuthController;
 use App\Http\Controllers\Api\Customer\PetController;
 use App\Http\Controllers\Api\Customer\CartController;
@@ -45,6 +46,7 @@ Route::middleware('auth:sanctum')->group(function () {
     // SuperAdmin Routes (Protected by Admin Role in Controller)
     Route::prefix('superadmin')->group(function () {
         Route::apiResource('products', ProductController::class);
+        Route::apiResource('categories', CategoryController::class);
     });
 });
 
