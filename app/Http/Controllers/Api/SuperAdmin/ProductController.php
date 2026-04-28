@@ -104,8 +104,21 @@ class ProductController extends Controller implements HasMiddleware
                 unset($fillableData['image']);
             }
 
+            // Mapping for the new frontend fields
+            if (isset($data['sellingPrice'])) {
+                $fillableData['price'] = $data['sellingPrice'];
+            }
+            if (isset($data['subCategory'])) {
+                $fillableData['sub_category'] = $data['subCategory'];
+            }
+            if (isset($data['collection'])) {
+                $fillableData['collection'] = $data['collection'];
+            }
+
             $validator = Validator::make($fillableData, [
-                'category_id' => 'required|exists:categories,id',
+                'category_id' => 'nullable|exists:categories,id',
+                'collection' => 'nullable|string|max:255',
+                'sub_category' => 'nullable|string|max:255',
                 'name' => 'required|string|max:255',
                 'description' => 'nullable|string',
                 'tags' => 'nullable|string',
@@ -171,8 +184,18 @@ class ProductController extends Controller implements HasMiddleware
 
         $data = $this->stringifyArrays($data);
 
+        // Mapping for the new frontend fields
+        if (isset($data['sellingPrice'])) {
+            $data['price'] = $data['sellingPrice'];
+        }
+        if (isset($data['subCategory'])) {
+            $data['sub_category'] = $data['subCategory'];
+        }
+
         $validator = Validator::make($data, [
-            'category_id' => 'sometimes|required|exists:categories,id',
+            'category_id' => 'nullable|exists:categories,id',
+            'collection' => 'nullable|string|max:255',
+            'sub_category' => 'nullable|string|max:255',
             'name' => 'sometimes|required|string|max:255',
             'price' => 'sometimes|required|numeric|min:0',
         ]);
@@ -241,6 +264,10 @@ class ProductController extends Controller implements HasMiddleware
         if ($product->image && str_starts_with($product->image, '/storage')) {
             $product->image = url($product->image);
         }
+
+        // Add virtual fields for frontend compatibility
+        $product->sellingPrice = $product->price;
+        $product->subCategory = $product->sub_category;
 
         return $product;
     }

@@ -8,6 +8,8 @@ class Product extends Model
 {
     protected $fillable = [
         'category_id',
+        'collection',
+        'sub_category',
         'name',
         'description',
         'tags',
