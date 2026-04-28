@@ -61,7 +61,7 @@ class ProductController extends Controller implements HasMiddleware
             if (isset($data['category']) && !isset($data['category_id'])) {
                 $categoryName = $data['category'];
                 $category = Category::where('name', $categoryName)->first();
-                
+
                 if (!$category) {
                     $category = Category::create([
                         'name' => $categoryName,
@@ -69,7 +69,7 @@ class ProductController extends Controller implements HasMiddleware
                         'status' => 'active'
                     ]);
                 }
-                
+
                 $data['category_id'] = $category->id;
             }
 
@@ -89,9 +89,10 @@ class ProductController extends Controller implements HasMiddleware
                 $data['image'] = '/storage/' . $path;
             }
 
+
+
             // --- PROTECTIVE LAYER: Ensure only fillable fields and correct types reach the DB ---
-            $fillableData = [];
-            $fields = ['category_id', 'name', 'description', 'tags', 'stock', 'mrp', 'price', 'materials', 'colors', 'image', 'status', 'featured'];
+            $fields = ['category_id', 'name', 'description', 'tags', 'mrp', 'price', 'materials', 'colors', 'image', 'status', 'featured'];
             foreach ($fields as $field) {
                 if (isset($data[$field])) {
                     $fillableData[$field] = $data[$field];
@@ -108,7 +109,6 @@ class ProductController extends Controller implements HasMiddleware
                 'name' => 'required|string|max:255',
                 'description' => 'nullable|string',
                 'tags' => 'nullable|string',
-                'stock' => 'required|integer|min:0',
                 'mrp' => 'nullable|numeric|min:0',
                 'price' => 'required|numeric|min:0',
                 'materials' => 'nullable|string',
@@ -174,7 +174,6 @@ class ProductController extends Controller implements HasMiddleware
         $validator = Validator::make($data, [
             'category_id' => 'sometimes|required|exists:categories,id',
             'name' => 'sometimes|required|string|max:255',
-            'stock' => 'sometimes|required|integer|min:0',
             'price' => 'sometimes|required|numeric|min:0',
         ]);
 

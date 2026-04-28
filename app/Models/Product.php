@@ -11,7 +11,6 @@ class Product extends Model
         'name',
         'description',
         'tags',
-        'stock',
         'mrp',
         'price',
         'materials',

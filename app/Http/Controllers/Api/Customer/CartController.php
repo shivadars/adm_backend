@@ -29,7 +29,7 @@ class CartController extends Controller
     public function store(Request $request)
     {
         $request->validate([
-            'items' => 'required|array',
+            'items' => 'present|array',
         ]);
 
         $cart = Cart::updateOrCreate(

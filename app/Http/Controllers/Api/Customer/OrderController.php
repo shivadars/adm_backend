@@ -51,17 +51,6 @@ class OrderController extends Controller
     /**
      * POST /api/orders
      * Place a new order.
-     *
-     * Expected payload from frontend:
-     * {
-     *   items: [{ id, name, price, cartQty, size, ... }],
-     *   address: { name, line1, city, pincode, phone },
-     *   payMethod: 'cod' | 'upi' | 'card',
-     *   petId: 1,          (optional)
-     *   petName: 'Buddy',  (optional)
-     *   petSize: 'M',      (optional)
-     *   total: 1299,       (for reference — we recalculate server-side)
-     * }
      */
     public function store(Request $request)
     {
@@ -85,47 +74,14 @@ class OrderController extends Controller
 
         $user = $request->user();
 
-        // ── 1. Stock validation ──────────────────────────────────────────────
-        // Fetch all products in the cart and check stock for each item.
+        // Fetch products to get current prices
         $productIds = collect($validated['items'])->pluck('id');
         $products   = Product::whereIn('id', $productIds)->get()->keyBy('id');
 
-        $outOfStock = [];
-        foreach ($validated['items'] as $item) {
-            $product = $products->get($item['id']);
-            if (!$product) {
-                $outOfStock[] = [
-                    'id'      => $item['id'],
-                    'name'    => $item['name'] ?? 'Unknown',
-                    'reason'  => 'Product not found.',
-                ];
-                continue;
-            }
-            if ($product->stock < $item['cartQty']) {
-                $outOfStock[] = [
-                    'id'        => $item['id'],
-                    'name'      => $product->name,
-                    'requested' => $item['cartQty'],
-                    'available' => $product->stock,
-                    'reason'    => $product->stock === 0
-                        ? 'Out of stock.'
-                        : "Only {$product->stock} left in stock.",
-                ];
-            }
-        }
-
-        if (!empty($outOfStock)) {
-            return response()->json([
-                'message'      => 'Some items are out of stock.',
-                'out_of_stock' => $outOfStock,
-            ], 422);
-        }
-
-        // ── 2. Begin transaction ─────────────────────────────────────────────
         return DB::transaction(function () use ($validated, $user, $products) {
             $addressData = $validated['address'];
 
-            // ── 3. Create or reuse address ───────────────────────────────────
+            // ── 1. Create or reuse address ───────────────────────────────────
             $address = Address::firstOrCreate(
                 [
                     'user_id'        => $user->id,
@@ -141,7 +97,7 @@ class OrderController extends Controller
                 ],
             );
 
-            // ── 4. Calculate totals server-side ──────────────────────────────
+            // ── 2. Calculate totals server-side ──────────────────────────────
             $subtotal = 0;
             foreach ($validated['items'] as $item) {
                 $product   = $products->get($item['id']);
@@ -151,10 +107,10 @@ class OrderController extends Controller
             $shippingCharge = $subtotal >= 999 ? 0 : 79;
             $totalAmount    = $subtotal + $shippingCharge;
 
-            // ── 5. Generate unique order number ──────────────────────────────
+            // ── 3. Generate unique order number ──────────────────────────────
             $orderNumber = 'ADM-' . now()->format('Ymd') . '-' . strtoupper(Str::random(4));
 
-            // ── 6. Create the order ──────────────────────────────────────────
+            // ── 4. Create the order ──────────────────────────────────────────
             $order = Order::create([
                 'user_id'         => $user->id,
                 'address_id'      => $address->id,
@@ -164,12 +120,12 @@ class OrderController extends Controller
                 'tax_amount'      => 0,
                 'total_amount'    => $totalAmount,
                 'payment_method'  => $validated['payMethod'],
-                'payment_status'  => $validated['payMethod'] === 'cod' ? 'pending' : 'pending',
+                'payment_status'  => 'pending',
                 'order_status'    => 'placed',
                 'placed_at'       => now(),
             ]);
 
-            // ── 7. Create order items + deduct stock ─────────────────────────
+            // ── 5. Create order items ───────────────────────────────────────
             foreach ($validated['items'] as $item) {
                 $product = $products->get($item['id']);
 
@@ -183,22 +139,19 @@ class OrderController extends Controller
                     'size'         => $item['size'] ?? $validated['petSize'] ?? null,
                     'pet_id'       => $validated['petId'] ?? null,
                 ]);
-
-                // Deduct stock
-                $product->decrement('stock', $item['cartQty']);
             }
 
-            // ── 8. Update pet measurements if provided ───────────────────────
+            // ── 6. Update pet measurements if provided ───────────────────────
             if (!empty($validated['petId']) && !empty($validated['petSize'])) {
                 Pet::where('id', $validated['petId'])
                     ->where('user_id', $user->id)
                     ->update(['size' => $validated['petSize']]);
             }
 
-            // ── 9. Clear the user's server-side cart ─────────────────────────
+            // ── 7. Clear the user's server-side cart ─────────────────────────
             Cart::where('user_id', $user->id)->delete();
 
-            // ── 10. Return the created order ─────────────────────────────────
+            // ── 8. Return the created order ─────────────────────────────────
             $order->load(['orderItems.product', 'orderItems.pet', 'address']);
 
             return response()->json([
@@ -214,7 +167,6 @@ class OrderController extends Controller
      */
     public function update(Request $request, Order $order)
     {
-        // Only allow status updates
         $validated = $request->validate([
             'status' => 'required|in:placed,confirmed,processing,shipped,delivered,cancelled',
         ]);

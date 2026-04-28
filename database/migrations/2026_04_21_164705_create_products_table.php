@@ -17,7 +17,6 @@ return new class extends Migration {
             $table->text('description')->nullable();
             $table->string('sizes')->nullable(); // Comma-separated
             $table->string('tags')->nullable(); // Comma-separated
-            $table->integer('stock')->default(0);
             $table->decimal('mrp', 10, 2)->nullable();
             $table->decimal('price', 10, 2); // Selling Price
             $table->text('materials')->nullable(); // Selection list
