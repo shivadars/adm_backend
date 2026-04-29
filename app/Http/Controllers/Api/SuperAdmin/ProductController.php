@@ -155,11 +155,20 @@ class ProductController extends Controller implements HasMiddleware
 
         $data = $request->all();
 
+        // Handle Image Upload - Aggressive Detection
+        $file = null;
         if ($request->hasFile('image')) {
-            if ($product->image) {
-                Storage::disk('public')->delete(str_replace('/storage/', '', $product->image));
-            }
             $file = $request->file('image');
+        } else if (isset($data['image']) && $data['image'] instanceof \Illuminate\Http\UploadedFile) {
+            $file = $data['image'];
+        }
+
+        if ($file) {
+            // Delete old image if it exists
+            if ($product->image) {
+                $oldPath = str_replace('/storage/', '', $product->image);
+                Storage::disk('public')->delete($oldPath);
+            }
             $imageName = 'product_' . time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
             $path = $file->storeAs('products', $imageName, 'public');
             $data['image'] = '/storage/' . $path;

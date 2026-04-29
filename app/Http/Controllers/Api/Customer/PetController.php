@@ -41,9 +41,15 @@ class PetController extends Controller
             ], 422);
         }
 
-        // ── Handle Image Upload (Direct File) ──
+        // ── Handle Image Upload (Aggressive Detection) ──
+        $file = null;
         if ($request->hasFile('image')) {
             $file = $request->file('image');
+        } else if (isset($data['image']) && $data['image'] instanceof \Illuminate\Http\UploadedFile) {
+            $file = $data['image'];
+        }
+
+        if ($file) {
             $imageName = 'pet_' . time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
             $path = $file->storeAs('pets', $imageName, 'public');
             $data['image'] = '/storage/' . $path;
@@ -138,7 +144,7 @@ class PetController extends Controller
             'name' => 'sometimes|required|string|max:255',
             'breed' => 'sometimes|required|string|max:255',
             'dob' => 'sometimes|required|date',
-            'image' => 'nullable|string',
+            'image' => 'nullable', // File object or URL string
             'instagram_username' => 'nullable|string|max:255',
             'size' => 'nullable|string|max:50',
             'neck_length' => 'nullable|numeric',
@@ -155,13 +161,20 @@ class PetController extends Controller
             ], 422);
         }
 
-        // ── Handle Image Upload (Direct File) ──
+        // ── Handle Image Upload (Aggressive Detection) ──
+        $file = null;
         if ($request->hasFile('image')) {
+            $file = $request->file('image');
+        } else if (isset($data['image']) && $data['image'] instanceof \Illuminate\Http\UploadedFile) {
+            $file = $data['image'];
+        }
+
+        if ($file) {
             // Delete old image if it exists
             if ($pet->image) {
-                Storage::disk('public')->delete(str_replace('/storage/', '', $pet->image));
+                $oldPath = str_replace('/storage/', '', $pet->image);
+                Storage::disk('public')->delete($oldPath);
             }
-            $file = $request->file('image');
             $imageName = 'pet_' . time() . '_' . uniqid() . '.' . $file->getClientOriginalExtension();
             $path = $file->storeAs('pets', $imageName, 'public');
             $data['image'] = '/storage/' . $path;
