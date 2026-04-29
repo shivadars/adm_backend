@@ -12,11 +12,11 @@ return new class extends Migration {
     {
         Schema::create('products', function (Blueprint $table) {
             $table->id();
-            $table->foreignId('category_id')->constrained()->onDelete('cascade');
+            $table->string('collection')->nullable();
+            $table->string('sub_category')->nullable();
             $table->string('name');
             $table->text('description')->nullable();
-            $table->string('sizes')->nullable(); // Comma-separated
-            $table->string('tags')->nullable(); // Comma-separated
+            $table->string('tags')->nullable();
             $table->decimal('mrp', 10, 2)->nullable();
             $table->decimal('price', 10, 2); // Selling Price
             $table->text('materials')->nullable(); // Selection list

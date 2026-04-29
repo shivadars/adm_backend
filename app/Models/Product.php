@@ -7,7 +7,6 @@ use Illuminate\Database\Eloquent\Model;
 class Product extends Model
 {
     protected $fillable = [
-        'category_id',
         'collection',
         'sub_category',
         'name',
@@ -22,14 +21,6 @@ class Product extends Model
         'featured',
     ];
 
-    public function category()
-    {
-        return $this->belongsTo(Category::class);
-    }
-
-    /**
-     * Get the order items associated with the product.
-     */
     public function orderItems()
     {
         return $this->hasMany(OrderItem::class);

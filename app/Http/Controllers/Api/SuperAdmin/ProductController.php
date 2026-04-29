@@ -37,7 +37,7 @@ class ProductController extends Controller implements HasMiddleware
      */
     public function index()
     {
-        $products = Product::with('category')->latest()->get();
+        $products = Product::latest()->get();
 
         $products->transform(function ($product) {
             return $this->formatProduct($product);
@@ -56,22 +56,6 @@ class ProductController extends Controller implements HasMiddleware
     {
         try {
             $data = $request->all();
-
-            // Auto-create category if name provided instead of ID
-            if (isset($data['category']) && !isset($data['category_id'])) {
-                $categoryName = $data['category'];
-                $category = Category::where('name', $categoryName)->first();
-
-                if (!$category) {
-                    $category = Category::create([
-                        'name' => $categoryName,
-                        'slug' => strtolower(str_replace(' ', '-', $categoryName)),
-                        'status' => 'active'
-                    ]);
-                }
-
-                $data['category_id'] = $category->id;
-            }
 
             $data = $this->stringifyArrays($data);
 
@@ -92,7 +76,7 @@ class ProductController extends Controller implements HasMiddleware
 
 
             // --- PROTECTIVE LAYER: Ensure only fillable fields and correct types reach the DB ---
-            $fields = ['category_id', 'name', 'description', 'tags', 'mrp', 'price', 'materials', 'colors', 'image', 'status', 'featured'];
+            $fields = ['name', 'description', 'tags', 'mrp', 'price', 'materials', 'colors', 'image', 'status', 'featured'];
             foreach ($fields as $field) {
                 if (isset($data[$field])) {
                     $fillableData[$field] = $data[$field];
@@ -116,7 +100,6 @@ class ProductController extends Controller implements HasMiddleware
             }
 
             $validator = Validator::make($fillableData, [
-                'category_id' => 'nullable|exists:categories,id',
                 'collection' => 'nullable|string|max:255',
                 'sub_category' => 'nullable|string|max:255',
                 'name' => 'required|string|max:255',
@@ -193,10 +176,10 @@ class ProductController extends Controller implements HasMiddleware
         }
 
         $validator = Validator::make($data, [
-            'category_id' => 'nullable|exists:categories,id',
-            'collection' => 'nullable|string|max:255',
+                'collection' => 'nullable|string|max:255',
             'sub_category' => 'nullable|string|max:255',
             'name' => 'sometimes|required|string|max:255',
+            'tags' => 'nullable|string',
             'price' => 'sometimes|required|numeric|min:0',
         ]);
 
