@@ -45,10 +45,9 @@ Route::middleware('auth:sanctum')->group(function () {
     ]);
 
     // SuperAdmin Routes (Protected by Admin Role in Controller)
-    Route::prefix('superadmin')->group(function () {
+    Route::prefix('superadmin')->name('superadmin.')->group(function () {
         Route::apiResource('products', ProductController::class);
         Route::apiResource('categories', CategoryController::class);
         Route::apiResource('orders', AdminOrderController::class);
     });
 });
-
