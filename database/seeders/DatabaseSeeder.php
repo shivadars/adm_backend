@@ -13,8 +13,7 @@ class DatabaseSeeder extends Seeder
     {
         // Call our specific seeders instead of using factories
         $this->call([
-            AdminUserSeeder::class,
-            CategorySeeder::class,
+            AdminSeeder::class,
         ]);
     }
 }

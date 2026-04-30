@@ -13,6 +13,8 @@ class OrderItem extends Model
         'price',
         'quantity',
         'total',
+        'size',
+        'pet_id',
     ];
 
     /**
@@ -29,5 +31,13 @@ class OrderItem extends Model
     public function product()
     {
         return $this->belongsTo(Product::class);
+    }
+
+    /**
+     * Get the pet associated with the order item.
+     */
+    public function pet()
+    {
+        return $this->belongsTo(Pet::class);
     }
 }
