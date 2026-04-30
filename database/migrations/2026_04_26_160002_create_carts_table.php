@@ -14,7 +14,7 @@ return new class extends Migration
         Schema::create('carts', function (Blueprint $table) {
             $table->id();
             $table->foreignId('user_id')->constrained()->onDelete('cascade');
-            $table->json('items')->default('[]');
+            $table->json('items');
             $table->timestamps();
 
             $table->unique('user_id'); // One cart per user
