@@ -60,7 +60,7 @@ class AuthController extends Controller
             'email' => 'required|string|email',
             'password' => 'required|string',
         ]);
-        log($request);
+
         if ($validator->fails()) {
             return response()->json([
                 'status' => 'error',
